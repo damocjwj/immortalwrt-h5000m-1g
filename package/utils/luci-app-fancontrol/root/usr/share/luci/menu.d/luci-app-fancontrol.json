@@ -1,0 +1,15 @@
+{
+	"admin/status/fancontrol": {
+		"title": "Fan Control",
+		"order": 11,
+		"action": {
+			"type": "view",
+			"path": "fancontrol"
+		},
+		"depends": {
+			"acl": [ "luci-app-fancontrol" ],
+			"uci": { "fancontrol": true }
+		}
+	}
+}
+

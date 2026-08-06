@@ -1,0 +1,15 @@
+. /lib/functions.sh
+
+case "$(board_name)" in
+hiveton,h5000m|\
+hiveton,h5000m-1g)
+	uci -q set firewall.@defaults[0].flow_offloading='0'
+	# firewall4's generic nft full-cone expression is not integrated with MTK
+	# HNAT.  Keep HNAT/WARP/WED, and use ordinary masquerading by default.
+	uci -q set firewall.@defaults[0].fullcone='0'
+	uci -q set firewall.@defaults[0].fullcone6='0'
+	uci -q commit firewall
+	;;
+esac
+
+exit 0

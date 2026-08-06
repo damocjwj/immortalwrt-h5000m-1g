@@ -1,0 +1,46 @@
+#!/bin/sh
+
+. /lib/functions.sh
+
+[ "$(board_name)" = "hiveton,h5000m-1g" ] || exit 0
+
+if [ "$(fw_printenv -n boot_fit_max_size 2>/dev/null)" = "6000000" ] &&
+   [ "$(fw_printenv -n boot_fit_max_blocks 2>/dev/null)" = "30000" ]; then
+	exit 0
+fi
+
+source=/etc/h5000m-1g-uboot.env
+script=/tmp/h5000m-1g-fw-setenv.$$
+
+[ -s "$source" ] || exit 1
+umask 077
+
+awk '
+	/^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+	{
+		separator = index($0, "=")
+		if (!separator)
+			exit 1
+		print substr($0, 1, separator - 1) " " substr($0, separator + 1)
+	}
+' "$source" > "$script" || {
+	rm -f "$script"
+	exit 1
+}
+
+# fw_envtools has a generic compiled-in fallback when both redundant copies
+# are invalid.  Remove its unrelated distro-boot fields in the same write.
+for key in mtdids mtdparts ethaddr eth6addr fdt_addr_r kernel_addr_r \
+	pxefile_addr_r ramdisk_addr_r scriptaddr boot_targets; do
+	printf '%s\n' "$key" >> "$script"
+done
+
+fw_setenv --script "$script" || {
+	rm -f "$script"
+	exit 1
+}
+rm -f "$script"
+
+[ "$(fw_printenv -n bootcmd 2>/dev/null)" = "run boot_emmc" ] &&
+[ "$(fw_printenv -n bootm_size 2>/dev/null)" = "0x6000000" ] &&
+[ "$(fw_printenv -n boot_fit_max_size 2>/dev/null)" = "6000000" ]

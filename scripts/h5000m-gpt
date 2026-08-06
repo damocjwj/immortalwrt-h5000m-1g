@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Build the two GPT table regions for the measured H5000M eMMC."""
+
+import argparse
+import struct
+import uuid
+import zlib
+from pathlib import Path
+
+
+SECTOR_SIZE = 512
+ENTRY_SIZE = 128
+ENTRY_COUNT = 128
+ENTRY_TABLE_SECTORS = ENTRY_SIZE * ENTRY_COUNT // SECTOR_SIZE
+PRIMARY_HEADER_LBA = 1
+PRIMARY_ENTRIES_LBA = 2
+FIRST_USABLE_LBA = PRIMARY_ENTRIES_LBA + ENTRY_TABLE_SECTORS
+GPT_SIGNATURE = b"EFI PART"
+GPT_REVISION = 0x00010000
+GPT_HEADER_SIZE = 92
+
+DISK_GUID = "5452574f-2211-4433-5566-778899aabb00"
+LINUX_FS_GUID = "0fc63daf-8483-4772-8e79-3d69d8477de4"
+EFI_SYSTEM_GUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+LINUX_FIT_GUID = "cae9be83-b15f-49cc-863f-081b744a2d93"
+
+
+def mib_to_lba(value):
+    return value * 1024 * 1024 // SECTOR_SIZE
+
+
+def partition_guid(index):
+    return uuid.UUID(f"5452574f-2211-4433-5566-778899aabb{index:02x}").bytes_le
+
+
+def encode_name(name):
+    return name.encode("utf-16le").ljust(72, b"\0")
+
+
+def build_entries(total_sectors):
+    backup_header_lba = total_sectors - 1
+    backup_entries_lba = backup_header_lba - ENTRY_TABLE_SECTORS
+    last_usable_lba = backup_entries_lba - 1
+    production_start = mib_to_lba(272)
+    data_start = mib_to_lba(16656)
+    partitions = (
+        ("ubootenv", mib_to_lba(4), mib_to_lba(4) + 1024 - 1, LINUX_FS_GUID),
+        ("factory", mib_to_lba(4) + 1024, 17407, LINUX_FS_GUID),
+        ("fip", 17408, 25599, EFI_SYSTEM_GUID),
+        ("recovery", mib_to_lba(16), production_start - 1, LINUX_FIT_GUID),
+        ("production", production_start, data_start - 1, LINUX_FIT_GUID),
+        ("data", data_start, last_usable_lba, LINUX_FS_GUID),
+    )
+
+    if partitions[-1][1] > partitions[-1][2] or partitions[0][1] < FIRST_USABLE_LBA:
+        raise ValueError("eMMC is too small for the H5000M fixed partitions")
+
+    entries = bytearray(ENTRY_SIZE * ENTRY_COUNT)
+    for index, (name, first_lba, last_lba, type_guid) in enumerate(partitions, start=1):
+        entry = struct.pack(
+            "<16s16sQQQ72s",
+            uuid.UUID(type_guid).bytes_le,
+            partition_guid(index),
+            first_lba,
+            last_lba,
+            0,
+            encode_name(name),
+        )
+        offset = (index - 1) * ENTRY_SIZE
+        entries[offset:offset + ENTRY_SIZE] = entry
+
+    return bytes(entries), backup_entries_lba, last_usable_lba
+
+
+def build_header(current_lba, backup_lba, entries_lba, last_usable_lba, entries_crc):
+    header = bytearray(struct.pack(
+        "<8sIIIIQQQQ16sQIII",
+        GPT_SIGNATURE,
+        GPT_REVISION,
+        GPT_HEADER_SIZE,
+        0,
+        0,
+        current_lba,
+        backup_lba,
+        FIRST_USABLE_LBA,
+        last_usable_lba,
+        uuid.UUID(DISK_GUID).bytes_le,
+        entries_lba,
+        ENTRY_COUNT,
+        ENTRY_SIZE,
+        entries_crc,
+    ))
+    struct.pack_into("<I", header, 16, zlib.crc32(header) & 0xffffffff)
+    return bytes(header).ljust(SECTOR_SIZE, b"\0")
+
+
+def build_protective_mbr(total_sectors):
+    mbr = bytearray(SECTOR_SIZE)
+    length = min(total_sectors - 1, 0xffffffff)
+    mbr[446:462] = struct.pack(
+        "<B3sB3sII", 0, b"\0\2\0", 0xee, b"\xff\xff\xff", 1, length
+    )
+    mbr[510:512] = b"\x55\xaa"
+    return bytes(mbr)
+
+
+def build_tables(total_sectors):
+    if total_sectors <= FIRST_USABLE_LBA + ENTRY_TABLE_SECTORS:
+        raise ValueError("invalid eMMC sector count")
+
+    entries, backup_entries_lba, last_usable_lba = build_entries(total_sectors)
+    entries_crc = zlib.crc32(entries) & 0xffffffff
+    backup_header_lba = total_sectors - 1
+    primary = (
+        build_protective_mbr(total_sectors)
+        + build_header(
+            PRIMARY_HEADER_LBA,
+            backup_header_lba,
+            PRIMARY_ENTRIES_LBA,
+            last_usable_lba,
+            entries_crc,
+        )
+        + entries
+    )
+    backup = entries + build_header(
+        backup_header_lba,
+        PRIMARY_HEADER_LBA,
+        backup_entries_lba,
+        last_usable_lba,
+        entries_crc,
+    )
+    return primary, backup
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sectors", type=int, required=True)
+    parser.add_argument("--output")
+    parser.add_argument("--part", choices=("primary", "backup"))
+    parser.add_argument("--primary")
+    parser.add_argument("--backup")
+    parser.add_argument("--verify", action="store_true")
+    args = parser.parse_args()
+
+    primary, backup = build_tables(args.sectors)
+
+    if args.verify:
+        if not args.primary or not args.backup:
+            parser.error("--verify requires --primary and --backup")
+        primary_path = Path(args.primary)
+        backup_path = Path(args.backup)
+        if primary_path.read_bytes() != primary or backup_path.read_bytes() != backup:
+            raise SystemExit("H5000M GPT table verification failed")
+        return
+
+    if not args.output or not args.part:
+        parser.error("generation requires --output and --part")
+    Path(args.output).write_bytes(primary if args.part == "primary" else backup)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,135 @@
+#!/bin/sh /etc/rc.common
+
+START=07
+
+mtk_wifi_e2p_die() {
+	echo "mtk wifi eeprom:" "$*"
+}
+
+mtk_wifi_e2p_extract() {
+	local part=$1
+	local offset=$2
+	local count=$3
+	local mtd
+
+	. /lib/functions.sh
+
+	mtd=$(find_mtd_part $part)
+	mtd=`echo $mtd | sed -e 's/mtdblock/mtd/'`
+	mmc=`blkid -t PARTLABEL=factory -o device`
+
+	if [ -n "$mtd" ]
+	then
+		input_dev=$mtd
+	elif [ -n "$mmc" ]
+	then
+		input_dev=$mmc
+	else
+		mtk_wifi_e2p_die "no flash device found for partition $part"
+		return
+	fi
+
+	dd if=$input_dev of=/lib/firmware/$FIRMWARE bs=$count skip=$offset count=1 2>/dev/null
+}
+
+mtk_wifi_e2p_h5000m_valid() {
+	local expected_size="$1"
+
+	[ -s "$FW" ] || return 1
+	[ "$(wc -c < "$FW")" = "$expected_size" ] || return 1
+	[ "$(tr -d '\000' < "$FW" | wc -c)" -gt 0 ] || return 1
+	[ "$(tr -d '\377' < "$FW" | wc -c)" -gt 0 ] || return 1
+}
+
+mtk_wifi_e2p_extract_h5000m() {
+	local expected_size="$1"
+
+	mtk_wifi_e2p_h5000m_valid "$expected_size" && return
+	rm -f "$FW"
+	mtk_wifi_e2p_extract "Factory" 0 "$expected_size"
+	mtk_wifi_e2p_h5000m_valid "$expected_size" && {
+		mtk_wifi_e2p_die "using EEPROM from factory partition"
+		return
+	}
+
+	rm -f "$FW"
+	mtk_wifi_e2p_die "invalid factory EEPROM, using driver default EEPROM"
+}
+
+mtk_wifi_e2p_is_h5000m() {
+	case "$1" in
+	hiveton,h5000m|hiveton,h5000m-1g) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+check_e2p() {
+	local board
+
+	[ -f "/etc/wireless/l1profile.dat" ] || return
+	# first line "Default" is illegal in shell
+	cat /etc/wireless/l1profile.dat | grep "EEPROM" > /tmp/l1profile.sh
+
+	. /tmp/l1profile.sh
+
+	[ "$FIRMWARE" != "" ] || FIRMWARE=$INDEX0_EEPROM_name
+	FW="/lib/firmware/$FIRMWARE"
+	. /lib/functions.sh
+	board="$(board_name 2>/dev/null)"
+	[ -e "$FW" ] && ! mtk_wifi_e2p_is_h5000m "$board" && return
+
+	# This is the ideal way, but driver does not follow...
+	# case "$FIRMWARE" in
+	# $INDEX0_EEPROM_name)
+	# 	mtk_wifi_e2p_extract "Factory" `printf "%d" $INDEX0_EEPROM_offset` `printf "%d" $INDEX0_EEPROM_size`
+	# 	;;
+	# $INDEX1_EEPROM_name)
+	# 	mtk_wifi_e2p_extract "Factory" `printf "%d" $INDEX1_EEPROM_offset` `printf "%d" $INDEX1_EEPROM_size`
+	# 	;;
+	# $INDEX2_EEPROM_name)
+	# 	mtk_wifi_e2p_extract "Factory" `printf "%d" $INDEX2_EEPROM_offset` `printf "%d" $INDEX2_EEPROM_size`
+	# 	;;
+	# esac
+
+	# Then here's the compromised way
+
+	case "$FIRMWARE" in
+	$INDEX2_EEPROM_name)
+		l1_e2p_offset=`printf "%d" $INDEX2_EEPROM_offset`
+		l1_e2p_size=`printf "%d" $INDEX2_EEPROM_size`
+		final_size=`expr $l1_e2p_offset + $l1_e2p_size`
+		if mtk_wifi_e2p_is_h5000m "$board"; then
+			mtk_wifi_e2p_extract_h5000m "$final_size"
+		else
+			mtk_wifi_e2p_extract "Factory" 0 $final_size
+		fi
+		;;
+	$INDEX1_EEPROM_name)
+		l1_e2p_offset=`printf "%d" $INDEX1_EEPROM_offset`
+		l1_e2p_size=`printf "%d" $INDEX1_EEPROM_size`
+		final_size=`expr $l1_e2p_offset + $l1_e2p_size`
+		if mtk_wifi_e2p_is_h5000m "$board"; then
+			mtk_wifi_e2p_extract_h5000m "$final_size"
+		else
+			mtk_wifi_e2p_extract "Factory" 0 $final_size
+		fi
+		;;
+	$INDEX0_EEPROM_name)
+		l1_e2p_offset=`printf "%d" $INDEX0_EEPROM_offset`
+		l1_e2p_size=`printf "%d" $INDEX0_EEPROM_size`
+		final_size=`expr $l1_e2p_offset + $l1_e2p_size`
+		if mtk_wifi_e2p_is_h5000m "$board"; then
+			mtk_wifi_e2p_extract_h5000m "$final_size"
+		else
+			mtk_wifi_e2p_extract "Factory" 0 $final_size
+		fi
+		;;
+	esac
+
+	rm -f /tmp/l1profile.sh
+}
+
+
+boot() {
+	check_e2p
+}

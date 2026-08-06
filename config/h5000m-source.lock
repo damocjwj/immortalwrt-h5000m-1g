@@ -1,0 +1,50 @@
+# Immutable upstream-base inputs for the Hiveton H5000M rebuild.  Stable
+# H5000M commits must descend from SOURCE_COMMIT; the verifier separately
+# audits their complete reviewed delta from this base.
+# Update this file and docs/h5000m-hardware-manifest.sha256 together when a
+# reviewed H5000M hardware change is intentionally made.
+
+SOURCE_URL=https://github.com/padavanonly/immortalwrt-mt798x-6.6.git
+SOURCE_REF=mt798x-mt799x-6.6-mtwifi
+SOURCE_COMMIT=1927a9e3e8d0cd09453b85d6833446e57de825a5
+
+# Trees at SOURCE_COMMIT.  The verifier uses these to ensure the complete
+# vendor source was retained rather than copied from, or pruned with, a dirty
+# working tree.
+PACKAGE_MTK_TREE=a0941420dd5ef9e33970fbe9520c952b47d7b52e
+PACKAGE_MTK_FILE_COUNT=4234
+MEDIATEK_TREE=b753697d192f2276f616924d52594d879a49a3c9
+MEDIATEK_FILE_COUNT=878
+
+FEED_PACKAGES=d955371f07f39c4017f8ee8c411c317eebb81d69
+FEED_LUCI=3f4af2f0aa5359651350f91934874c0465342ee1
+FEED_ROUTING=cd05be684e670095d20663d1c41766cf8b54de61
+FEED_TELEPHONY=92892fa285360b8981f62bf4e0a097e6449e7e33
+
+H5000M_ATF_SOURCE=78a0dfd927bb00ce973a1f8eb4079df0f755887a
+# Repacked from the fixed GitHub source commit and its fixed Gitlink below;
+# the custom H5000M source archive is not published by upstream mirrors.
+H5000M_ATF_MIRROR_HASH=7b0710d8eed0204247d050607a24f07d9bc3a5191aa93c88479e3a49e8ec3116
+H5000M_ATF_LIBTL_SOURCE=67d85f181b726d2823eea43e8bb4ffb97559d348
+H5000M_UBOOT_VERSION=2025.10
+H5000M_UBOOT_HASH=b4f032848e56cc8f213ad59f9132c084dbbb632bc29176d024e58220e0efdf4a
+# Reproducible H5000M boot-chain outputs. The FIP hash below includes the
+# reviewed 1 GiB FIT loading limit plus the audited default-environment hunk
+# and hexadecimal-comparison fixes. A different hash needs a deliberate
+# boot-chain review; ordinary H5000M system-image updates do not rewrite eMMC
+# boot0 or the fip partition.
+H5000M_BL2_SHA256=41d1b2d1f0868af6f215a9ed175f982228dcbf5e3421b0796978724a7dec93e4
+H5000M_FIP_SHA256=53b7ae589ae26986bc9531078cc395a6e03090aeef6b0f381f0aff96056c64a3
+
+# Measured through the H5000M serial console: 488636416 512-byte sectors.
+H5000M_EMMC_SECTORS=488636416
+H5000M_EMMC_BYTES=250181844992
+
+# Read-only identification of the supported 1G/8GB unit (8GTF4R).
+H5000M_1G_EMMC_SECTORS=15269888
+H5000M_1G_EMMC_BYTES=7818182656
+# Reviewed clean-build outputs for the 1G-only boot chain.  Ordinary system
+# upgrades must not rewrite BL2 or FIP; any future hash change requires a new
+# source/configuration review before those artifacts may be flashed.
+H5000M_1G_BL2_SHA256=509f8f5777a2a9154d169005c80cf5fae2284fa7a74c9924d2acfa99236a9d38
+H5000M_1G_FIP_SHA256=b95201d9283a1f4efab97fcc9c4d39c0bd0b614305a9c1dfcc00b55986bbeaa1

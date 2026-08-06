@@ -1,0 +1,31 @@
+{
+	"luci-app-fancontrol": {
+		"description": "Grant access to Fan Control",
+		"read": {
+			"uci": [ "fancontrol" ],
+			"ubus": {
+				"file": [ "read", "exec" ],
+				"uci": [ "get" ]
+			},
+			"file": {
+				"/usr/bin/fancontrol": [ "exec" ],
+				"/var/run/fancontrol.json": [ "read" ],
+				"/sys/class/thermal/*": [ "read" ],
+				"/sys/class/hwmon/*": [ "read" ],
+				"/sys/devices/platform/pwm-fan/*": [ "read" ],
+				"/sys/devices/virtual/thermal/*": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "fancontrol" ],
+			"ubus": {
+				"file": [ "exec" ],
+				"uci": [ "add", "apply", "commit", "confirm", "delete", "set" ]
+			},
+			"file": {
+				"/etc/init.d/fancontrol": [ "exec" ]
+			}
+		}
+	}
+}
+

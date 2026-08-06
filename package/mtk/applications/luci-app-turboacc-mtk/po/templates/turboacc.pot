@@ -1,0 +1,79 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8"
+
+#: package/mtk/applications/luci-app-turboacc-mtk/root/usr/share/rpcd/acl.d/luci-app-turboacc.json:3
+msgid "Grant UCI access for luci-app-turboacc"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:213
+msgid "HNAT 绑定速率阈值（pps）"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:192
+msgid "MediaTek HNAT"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:150
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:221
+msgid "TCP 拥塞控制算法"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:181
+msgid "加速状态"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:208
+msgid "启用 IPv6 HNAT。"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:202
+msgid ""
+"启用 MediaTek HNAT hook_toggle；保存并应用后由 turboacc 服务写入内核开关。"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:201
+msgid "启用有线 HNAT"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:207
+msgid "启用有线 IPv6 HNAT"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:89
+msgid "已禁用"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:113
+msgid "已绑定连接数"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:146
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:189
+msgid "快速转发引擎"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:191
+msgid "禁用"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/root/usr/share/luci/menu.d/luci-app-turboacc.json:3
+msgid "网络加速"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:137
+msgid "网络加速设置"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:222
+msgid ""
+"选择 TCP 拥塞控制算法。BBR 适合高带宽链路，CUBIC 为内核默认，Reno 兼容性最"
+"佳。"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:190
+msgid "选择当前使用的加速方式。"
+msgstr ""
+
+#: package/mtk/applications/luci-app-turboacc-mtk/htdocs/luci-static/resources/view/turboacc.js:214
+msgid "默认 30。"
+msgstr ""

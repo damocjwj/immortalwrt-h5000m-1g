@@ -1,0 +1,363 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+topdir="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+cd "$topdir"
+. config/h5000m-source.lock
+
+fit_limit=$((96 * 1024 * 1024))
+
+fail() {
+	echo "H5000M 1G verification failed: $*" >&2
+	exit 1
+}
+
+expect_file() {
+	[ -s "$1" ] || fail "missing or empty file: $1"
+}
+
+expect_line() {
+	grep -Fqx "$2" "$1" || fail "$1 lacks: $2"
+}
+
+expect_config() {
+	expect_line .config "$1"
+}
+
+expect_no_config() {
+	grep -Fqx "$1" .config && fail "forbidden configuration is enabled: $1"
+	return 0
+}
+
+expect_eq() {
+	[ "$1" = "$2" ] || fail "$3 (got '$1', expected '$2')"
+}
+
+git cat-file -e h5000m-stable-2026.07.17^{commit} 2>/dev/null || \
+	fail "4G stable source tag is unavailable"
+git merge-base --is-ancestor h5000m-stable-2026.07.17 HEAD || \
+	fail "HEAD does not descend from h5000m-stable-2026.07.17"
+expect_eq "$H5000M_1G_EMMC_SECTORS" 15269888 "8GTF4R sector count"
+expect_eq "$H5000M_1G_EMMC_BYTES" 7818182656 "8GTF4R byte count"
+
+# This repository is a single-hardware baseline.  The 4G definitions retained
+# as source templates must not be exported as selectable boot or image targets.
+expect_line package/boot/arm-trusted-firmware-mediatek-h5000m/Makefile \
+	'TFA_TARGETS:=mt7987-emmc-comb'
+expect_line package/boot/uboot-mediatek-h5000m/Makefile \
+	'UBOOT_TARGETS:=mt7987_hiveton_h5000m-1g-emmc'
+expect_line target/linux/mediatek/image/filogic.mk \
+	'TARGET_DEVICES += hiveton-h5000m-1g'
+grep -Fq 'CONFIG_TARGET_mediatek_filogic_DEVICE_hiveton-h5000m-1g' include/target.mk || \
+	fail "1G target does not receive the release kernel configuration"
+if grep -Fqx 'TARGET_DEVICES += hiveton-h5000m' target/linux/mediatek/image/filogic.mk; then
+	fail "4G H5000M image target is exported by the 1G repository"
+fi
+
+for feed in packages luci routing telephony; do
+	case "$feed" in
+	packages) wanted="$FEED_PACKAGES" ;;
+	luci) wanted="$FEED_LUCI" ;;
+	routing) wanted="$FEED_ROUTING" ;;
+	telephony) wanted="$FEED_TELEPHONY" ;;
+	esac
+	[ -d "feeds/$feed/.git" ] || fail "feed is absent: $feed"
+	expect_eq "$(git -C "feeds/$feed" rev-parse HEAD)" "$wanted" "feed $feed commit"
+done
+
+expect_file docs/h5000m-1g-hardware-manifest.sha256
+sha256sum -c docs/h5000m-1g-hardware-manifest.sha256 >/dev/null || \
+	fail "hardware manifest mismatch"
+expect_file package/network/config/netifd/Makefile
+grep -Fq '$(LN) ifup $(1)/sbin/ifdown' package/network/config/netifd/Makefile || \
+	fail "netifd does not install ifdown as an ifup symlink"
+
+[ -f .config ] || fail "run cp config/h5000m-1g-minimal.config .config && make defconfig"
+for symbol in \
+	CONFIG_TARGET_mediatek_filogic_DEVICE_hiveton-h5000m-1g=y \
+	CONFIG_TARGET_ROOTFS_PARTSIZE=7311 \
+	CONFIG_PACKAGE_trusted-firmware-a-mt7987-emmc-comb=y \
+	CONFIG_PACKAGE_u-boot-mt7987_hiveton_h5000m-1g-emmc=y \
+	CONFIG_PACKAGE_kmod-br-netfilter=y CONFIG_PACKAGE_kmod-ipt-core=y \
+	CONFIG_PACKAGE_kmod-nf-ipt=y \
+	CONFIG_PACKAGE_kmod-dummy=y CONFIG_PACKAGE_kmod-inet-diag=y \
+	CONFIG_PACKAGE_kmod-nf-socket=y CONFIG_PACKAGE_kmod-nf-tproxy=y \
+	CONFIG_PACKAGE_kmod-nft-socket=y CONFIG_PACKAGE_kmod-nft-tproxy=y \
+	CONFIG_PACKAGE_kmod-tun=y \
+	CONFIG_PACKAGE_kmod-mediatek_hnat=y CONFIG_PACKAGE_kmod-warp=y \
+	CONFIG_PACKAGE_kmod-mt7992=y CONFIG_PACKAGE_kmod-mt799a=y \
+	CONFIG_PACKAGE_kmod-tcp-bbr=y CONFIG_PACKAGE_luci-app-turboacc-mtk=y \
+	CONFIG_PACKAGE_fancontrol=y CONFIG_PACKAGE_luci-app-fancontrol=y \
+	CONFIG_PACKAGE_luci-app-modem=y CONFIG_PACKAGE_quectel-CM-5G=y \
+	CONFIG_DEFAULT_sms-tool=y \
+	CONFIG_PACKAGE_dnsmasq-full=y \
+	CONFIG_PACKAGE_wpad-openssl=y CONFIG_PACKAGE_luci-app-package-manager=y \
+	CONFIG_PACKAGE_uboot-envtools=y CONFIG_PACKAGE_mkf2fs=y; do
+	expect_config "$symbol"
+done
+
+bridge_sysctl=package/kernel/linux/files/sysctl-br-netfilter.conf
+expect_file "$bridge_sysctl"
+for setting in \
+	'net.bridge.bridge-nf-call-arptables=0' \
+	'net.bridge.bridge-nf-call-ip6tables=0' \
+	'net.bridge.bridge-nf-call-iptables=0'; do
+	expect_line "$bridge_sysctl" "$setting"
+done
+
+for symbol in \
+	CONFIG_PACKAGE_block-mount=y CONFIG_PACKAGE_e2fsprogs=y \
+	CONFIG_PACKAGE_mtd=y CONFIG_PACKAGE_ubi-utils=y \
+	CONFIG_PACKAGE_shellsync=y CONFIG_PACKAGE_kmod-macvlan=y \
+	CONFIG_PACKAGE_kmod-wireguard=y CONFIG_PACKAGE_kmod-veth=y \
+	CONFIG_PACKAGE_kmod-nf-ipvs=y CONFIG_PACKAGE_kmod-udptunnel4=y \
+	CONFIG_PACKAGE_kmod-udptunnel6=y CONFIG_PACKAGE_kmod-ipt-fullconenat=y \
+	CONFIG_PACKAGE_iptables-mod-fullconenat=y CONFIG_PACKAGE_luci-app-turboacc=y \
+	CONFIG_PACKAGE_kmod-fs-ext4=y CONFIG_PACKAGE_luci-app-diskman=y \
+	CONFIG_PACKAGE_luci-app-nikki=y CONFIG_PACKAGE_nikki=y \
+	CONFIG_PACKAGE_subpipe=y CONFIG_PACKAGE_zapret2=y \
+	CONFIG_PACKAGE_luci-app-sms-tool=y; do
+	expect_no_config "$symbol"
+done
+
+if awk -F= '$1 ~ /^CONFIG_PACKAGE_/ && $2 == "m" { found = 1 } END { exit !found }' .config; then
+	fail "a selected package uses module mode"
+fi
+
+dts=target/linux/mediatek/dts/mt7987a-hiveton-h5000m-1g.dts
+for text in \
+	'compatible = "hiveton,h5000m-1g",' \
+	'reg = <0x0 0x40000000 0x0 0x40000000>;'; do
+	grep -Fq "$text" "$dts" || fail "1G DTS lacks: $text"
+done
+
+image=target/linux/mediatek/image/filogic.mk
+for text in \
+	'H5000M_1G_EMMC_SECTORS := 15269888' \
+	'H5000M_1G_BOOT_FIT_MAX_SIZE := 96m' \
+	'H5000M_1G_RECOVERY_FIT_MAX_SIZE := 96m' \
+	'DEVICE_DTS_LOADADDR := 0x4ff00000' \
+	'KERNEL_LOADADDR := 0x40000000' \
+	'ARTIFACT/emmc-preloader.bin := mt7987-bl2 emmc-comb'; do
+	grep -Fq "$text" "$image" || fail "1G image definition lacks: $text"
+done
+
+upgrade=target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
+for text in \
+	"RAMFS_COPY_BIN='fitblk blkid dmsetup strings hexdump'" \
+	'h5000m_fit_overlay_blocks()' \
+	"version=\"\$(dd if=\"\$fit_tmp\" bs=1 skip=\$((squashfs_offset + 28)) count=4" \
+	'rootfs_end=$((((squashfs_offset + bytes_used + 4095) / 4096) * 4096))' \
+	'export EMMC_KERNEL_BLOCKS="$overlay_blocks"'; do
+	grep -Fq "$text" "$upgrade" || fail "H5000M FIT config restore lacks: $text"
+done
+
+uboot_patch=package/boot/uboot-mediatek-h5000m/patches/473-add-hiveton-h5000m-1g.patch
+for text in \
+	'+CONFIG_SYS_BOOTM_LEN=0x6000000' \
+	'+CONFIG_SYS_LOAD_ADDR=0x48000000' \
+	'+loadaddr=0x48000000' \
+	'+boot_fit_max_blocks=30000' \
+	'+boot_fit_max_size=6000000' \
+	'+recovery_fit_max_size=6000000' \
+	'+gpt_layout=name=ubootenv,start=4M,size=512K;name=factory,start=4608K,size=4M;name=fip,start=8704K,size=4M;name=recovery,start=16M,size=128M;name=production,size=-'; do
+	grep -Fq "$text" "$uboot_patch" || fail "1G U-Boot patch lacks: $text"
+done
+if rg -q '^\+gpt_layout=.*(data|p128)' "$uboot_patch"; then
+	fail "1G U-Boot GPT retains data or p128"
+fi
+
+env_baseline=target/linux/mediatek/filogic/base-files/etc/h5000m-1g-uboot.env
+env_defaults=target/linux/mediatek/filogic/base-files/etc/uci-defaults/97-h5000m-1g-uboot-env
+for text in \
+	'bootcmd=run boot_emmc' 'loadaddr=0x48000000' \
+	'bootm_size=0x6000000' 'boot_fit_max_blocks=30000' \
+	'boot_fit_max_size=6000000' 'recovery_fit_max_size=6000000' \
+	'gpt_layout=name=ubootenv,start=4M,size=512K;name=factory,start=4608K,size=4M;name=fip,start=8704K,size=4M;name=recovery,start=16M,size=128M;name=production,size=-'; do
+	expect_line "$env_baseline" "$text"
+done
+grep -Fq 'hiveton,h5000m-1g' "$env_defaults" || fail "1G environment initializer lacks board guard"
+grep -Fq 'fw_setenv --script' "$env_defaults" || fail "1G environment initializer does not use one redundant write"
+grep -Fq 'boot_fit_max_blocks' "$env_defaults" || fail "1G environment initializer lacks FIT safety validation"
+sh -n "$env_defaults"
+
+userdata=target/linux/mediatek/filogic/base-files/etc/uci-defaults/98-h5000m-userdata
+[ ! -e "$userdata" ] || fail "1G image retains the userdata first-boot script"
+grep -Fq 'hiveton,h5000m-1g)' target/linux/mediatek/filogic/base-files/etc/uci-defaults/99-h5000m-hnat || \
+	fail "1G HNAT defaults are absent"
+grep -Fq 'hiveton,h5000m-1g|\' package/boot/uboot-envtools/files/mediatek_filogic || \
+	fail "1G uboot-envtools board branch is absent"
+grep -Fq '100663296' target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh || \
+	fail "1G runtime FIT limit is absent"
+
+[ ! -e target/linux/generic/pending-6.6/682-add-bcm-fullconenat-support.patch ] || \
+	fail "BCM Full-cone kernel patch is present"
+if rg -q 'nf_conntrack_nat_mode|bcm_nat' \
+	package/mtk/applications/luci-app-turboacc-mtk target/linux/mediatek; then
+	fail "BCM Full-cone interface is present"
+fi
+
+python3 - scripts/h5000m-1g-gpt <<'PY'
+import pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text()
+compile(source, sys.argv[1], 'exec')
+PY
+sh -n target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
+sh -n package/mtk/drivers/mt_wifi7/files/wifi_e2p.init
+sh -n package/mtk/applications/luci-app-turboacc-mtk/root/etc/uci-defaults/turboacc
+git diff --check
+
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT INT TERM
+scripts/h5000m-1g-gpt --sectors "$H5000M_1G_EMMC_SECTORS" --part primary --output "$tmpdir/primary"
+scripts/h5000m-1g-gpt --sectors "$H5000M_1G_EMMC_SECTORS" --part backup --output "$tmpdir/backup"
+scripts/h5000m-1g-gpt --sectors "$H5000M_1G_EMMC_SECTORS" --verify \
+	--primary "$tmpdir/primary" --backup "$tmpdir/backup"
+python3 - "$tmpdir/primary" "$tmpdir/backup" <<'PY'
+import binascii, struct, sys, uuid
+from pathlib import Path
+
+primary, backup = map(lambda p: Path(p).read_bytes(), sys.argv[1:])
+assert len(primary) == 17408 and len(backup) == 16896
+assert primary[510:512] == b'\x55\xaa' and primary[450] == 0xee
+
+def check_header(raw, offset, current, other, entries_lba):
+    header = bytearray(raw[offset:offset + 92])
+    assert header[:8] == b'EFI PART'
+    stored = struct.unpack_from('<I', header, 16)[0]
+    struct.pack_into('<I', header, 16, 0)
+    assert binascii.crc32(header) & 0xffffffff == stored
+    values = struct.unpack_from('<QQQQ', header, 24)
+    assert values == (current, other, 34, 15269854)
+    assert struct.unpack_from('<Q', header, 72)[0] == entries_lba
+    return struct.unpack_from('<I', header, 88)[0]
+
+entries = primary[1024:17408]
+entries_crc = check_header(primary, 512, 1, 15269887, 2)
+assert binascii.crc32(entries) & 0xffffffff == entries_crc
+backup_crc = check_header(backup, 16384, 15269887, 1, 15269855)
+assert backup[:16384] == entries and backup_crc == entries_crc
+
+linux_fs = uuid.UUID('0fc63daf-8483-4772-8e79-3d69d8477de4').bytes_le
+efi = uuid.UUID('c12a7328-f81f-11d2-ba4b-00a0c93ec93b').bytes_le
+linux_fit = uuid.UUID('cae9be83-b15f-49cc-863f-081b744a2d93').bytes_le
+wanted = [
+    ('ubootenv', 8192, 9215, linux_fs),
+    ('factory', 9216, 17407, linux_fs),
+    ('fip', 17408, 25599, efi),
+    ('recovery', 32768, 294911, linux_fit),
+    ('production', 294912, 15269854, linux_fit),
+]
+for index, (name, first, last, ptype) in enumerate(wanted):
+    entry = entries[index * 128:(index + 1) * 128]
+    assert entry[:16] == ptype
+    assert struct.unpack_from('<QQ', entry, 32) == (first, last)
+    assert entry[56:128].decode('utf-16le').rstrip('\0') == name
+assert not any(entries[len(wanted) * 128:])
+PY
+
+uboot_config="$(find build_dir/target-aarch64_cortex-a53_musl/u-boot-mt7987_hiveton_h5000m-1g-emmc -name .config -type f -print -quit 2>/dev/null || true)"
+if [ -n "$uboot_config" ]; then
+	for symbol in \
+		CONFIG_SYS_BOOTM_LEN=0x6000000 CONFIG_SYS_LOAD_ADDR=0x48000000 \
+		CONFIG_DEFAULT_DEVICE_TREE=\"mt7987a-hiveton-h5000m-1g-emmc\" \
+		CONFIG_ENV_IS_IN_MMC=y CONFIG_ENV_REDUNDANT=y; do
+		expect_line "$uboot_config" "$symbol"
+	done
+fi
+
+if [ "${1:-}" = "--artifacts" ]; then
+	netifd_ipk="$(find bin/packages/aarch64_cortex-a53/base -maxdepth 1 -type f \
+		-name 'netifd_*r2_*.ipk' -print -quit)"
+	expect_file "$netifd_ipk"
+	tar -xOzf "$netifd_ipk" ./data.tar.gz | tar -tzvf - | \
+		grep -Fq './sbin/ifdown -> ifup' || \
+		fail "packaged netifd does not contain the ifdown symlink"
+	bindir=bin/targets/mediatek/filogic
+	prefix="$bindir/immortalwrt-mediatek-filogic-hiveton-h5000m-1g"
+	for artifact in \
+		"$prefix-squashfs-sysupgrade.itb" \
+		"$prefix-initramfs-recovery.itb" \
+		"$prefix-emmc-gpt.bin" "$prefix-emmc-gpt-backup.bin" \
+		"$prefix-emmc-preloader.bin" "$prefix-emmc-bl31-uboot.fip"; do
+		expect_file "$artifact"
+	done
+	expect_eq "$(sha256sum "$prefix-emmc-preloader.bin" | awk '{print $1}')" \
+		"$H5000M_1G_BL2_SHA256" "reviewed BL2 SHA-256"
+	expect_eq "$(sha256sum "$prefix-emmc-bl31-uboot.fip" | awk '{print $1}')" \
+		"$H5000M_1G_FIP_SHA256" "reviewed FIP SHA-256"
+
+	fit_bytes="$(staging_dir/host/bin/fwtool -i /dev/null -T "$prefix-squashfs-sysupgrade.itb" | wc -c)"
+	recovery_bytes="$(wc -c < "$prefix-initramfs-recovery.itb")"
+	[ "$fit_bytes" -le "$fit_limit" ] || fail "production FIT exceeds 96 MiB"
+	[ "$recovery_bytes" -le "$fit_limit" ] || fail "recovery FIT exceeds 96 MiB"
+	[ $((fit_bytes % 65536)) -eq 0 ] || fail "production FIT is not 64 KiB aligned"
+	[ $((recovery_bytes % 65536)) -eq 0 ] || fail "recovery FIT is not 64 KiB aligned"
+
+	scripts/h5000m-1g-gpt --sectors "$H5000M_1G_EMMC_SECTORS" --verify \
+		--primary "$prefix-emmc-gpt.bin" --backup "$prefix-emmc-gpt-backup.bin"
+
+	for text in \
+		'bootcmd=run boot_emmc' 'loadaddr=0x48000000' \
+		'boot_fit_max_blocks=30000' 'boot_fit_max_size=6000000' \
+		'recovery_fit_max_size=6000000' \
+		'gpt_layout=name=ubootenv,start=4M,size=512K;name=factory,start=4608K,size=4M;name=fip,start=8704K,size=4M;name=recovery,start=16M,size=128M;name=production,size=-'; do
+		strings "$prefix-emmc-bl31-uboot.fip" | grep -Fqx "$text" || \
+			fail "FIP lacks: $text"
+	done
+
+	manifest="$prefix.manifest"
+	expect_file "$manifest"
+	manifest_has() {
+		awk -v package="$1" '$1 == package { found = 1 } END { exit !found }' "$manifest"
+	}
+	for package in \
+		kmod-br-netfilter kmod-ipt-core kmod-nf-ipt \
+		kmod-dummy kmod-inet-diag kmod-nf-socket kmod-nf-tproxy \
+		kmod-nft-socket kmod-nft-tproxy kmod-tun \
+		kmod-mediatek_hnat kmod-warp kmod-mt_wifi7 kmod-mt_hwifi \
+		kmod-mt7992 kmod-mt799a kmod-mtk_wed kmod-tcp-bbr \
+		quectel-CM-5G luci-app-modem sms-tool \
+		fancontrol luci-app-fancontrol \
+		luci-app-turboacc-mtk dnsmasq-full wpad-openssl \
+		luci-app-package-manager uboot-envtools mkf2fs; do
+		manifest_has "$package" || fail "required package missing: $package"
+	done
+	for package in \
+		block-mount e2fsprogs libext2fs2 libe2p2 libss2 libcomerr0 \
+		mtd ubi-utils shellsync kmod-macvlan kmod-wireguard kmod-veth \
+		kmod-nf-ipvs kmod-udptunnel4 kmod-udptunnel6 \
+		kmod-ipt-fullconenat iptables-mod-fullconenat luci-app-turboacc \
+		kmod-fs-ext4 luci-app-diskman nikki luci-app-nikki subpipe zapret2 \
+		luci-app-sms-tool; do
+		manifest_has "$package" && fail "forbidden package is installed: $package"
+	done
+
+	fit_tool=staging_dir/host/bin/mkimage
+	[ -x "$fit_tool" ] || fail "FIT inspection tool is unavailable"
+	for fit in "$prefix-squashfs-sysupgrade.itb" "$prefix-initramfs-recovery.itb"; do
+		info="$($fit_tool -l "$fit")" || fail "invalid FIT: $fit"
+		printf '%s\n' "$info" | grep -Fq 'Load Address: 0x40000000' || fail "kernel load address: $fit"
+		printf '%s\n' "$info" | grep -Fq 'Load Address: 0x4ff00000' || fail "DTB load address: $fit"
+	done
+
+	kernel_config="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -path '*/linux-6.6.*/.config' -type f -print -quit 2>/dev/null || true)"
+	[ -n "$kernel_config" ] || fail "built kernel configuration is absent"
+	kernel_tree="${kernel_config%/.config}"
+	for symbol in \
+		'# CONFIG_DEBUG_KERNEL is not set' 'CONFIG_DEBUG_FS=y' \
+		'# CONFIG_FTRACE is not set' '# CONFIG_KPROBES is not set' \
+		'# CONFIG_PERF_EVENTS is not set'; do
+		expect_line "$kernel_config" "$symbol"
+	done
+	if grep -Eq '^CONFIG_DEBUG_INFO(=|_)' "$kernel_config"; then
+		fail "built kernel enables debug information"
+	fi
+	if rg -q 'nf_conntrack_nat_mode|bcm_nat' "$kernel_tree" 2>/dev/null; then
+		fail "built kernel contains BCM Full-cone code"
+	fi
+fi
+
+echo "H5000M 1G verification passed."

@@ -1,0 +1,183 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2018 Lean <coolsnowwolf@gmail.com>
+# Copyright (C) 2019-2022 Tianling Shen <cnsztl@immortalwrt.org>
+# Copyright (C) 2024-2026 Refactored for OpenWrt 24.10 mt798x stability
+
+START=90
+STOP=10
+USE_PROCD=1
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+module_loaded() {
+	local module
+	for module in "$@"; do
+		[ -d "/sys/module/$module" ] && return 0
+	done
+	return 1
+}
+
+try_modprobe() {
+	local module
+	for module in "$@"; do
+		modprobe "$module" 2>/dev/null && return 0
+	done
+	return 1
+}
+
+hnat_module_loaded() {
+	module_loaded "mtkhnat" "mediatek_hnat"
+}
+
+load_hnat_module() {
+	try_modprobe "mtkhnat" "mediatek_hnat"
+}
+
+disable_hnat_runtime() {
+	local hnat_path="${1:-/sys/kernel/debug/hnat}"
+
+	[ -w "$hnat_path/hook_toggle" ] && echo "0" >"$hnat_path/hook_toggle" 2>/dev/null
+	[ -w "$hnat_path/hnat_setting" ] && echo "8 0" >"$hnat_path/hnat_setting" 2>/dev/null
+}
+
+wait_hnat_debugfs() {
+	local hnat_path="${1:-/sys/kernel/debug/hnat}"
+	local i
+
+	for i in 1 2 3 4 5 6 7 8 9 10; do
+		[ -d "$hnat_path" ] && return 0
+		sleep 0.2
+	done
+
+	return 1
+}
+
+# busybox-safe debugfs mount check; avoids `mountpoint -q` which may be absent
+ensure_debugfs() {
+	grep -q ' /sys/kernel/debug debugfs ' /proc/mounts 2>/dev/null && return 0
+	mkdir -p /sys/kernel/debug 2>/dev/null
+	mount -t debugfs none /sys/kernel/debug 2>/dev/null && return 0
+	logger -t turboacc "WARNING: cannot mount debugfs; HNAT runtime knobs may be absent"
+	return 1
+}
+
+# write a single decimal value to a debugfs knob with existence + writability guards
+hwrite() {
+	local path="$1"
+	local value="$2"
+	[ -n "$path" ] && [ -n "$value" ] || return 1
+	[ -w "$path" ] && echo "$value" >"$path" 2>/dev/null && return 0
+	return 1
+}
+
+_uci_bool_enabled() {
+	# normalised check for UCI boolean: 1 / on / true / yes / enabled
+	case "${1:-0}" in
+	1|on|true|yes|enabled) return 0 ;;
+	esac
+	return 1
+}
+
+# ---------------------------------------------------------------------------
+# procd lifecycle
+# ---------------------------------------------------------------------------
+stop_service() {
+	local hnat_path="/sys/kernel/debug/hnat"
+
+	ensure_debugfs
+
+	# disable HNAT hook if still accessible
+	disable_hnat_runtime "$hnat_path"
+
+	# restore TCP CCA to cubic
+	sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null 2>&1
+
+	logger -t turboacc "stopped"
+}
+
+start_service() {
+	config_load "turboacc"
+
+	local fastpath
+	local hnat_path="/sys/kernel/debug/hnat"
+	local fastpath_mh_eth_hnat="0"
+	config_get fastpath "config" "fastpath"
+	[ -n "$fastpath" ] || fastpath="none"
+
+	# ---------- debugfs (required for HNAT knobs) ----------
+	ensure_debugfs
+
+	if [ "$fastpath" != "mediatek_hnat" ] && hnat_module_loaded && [ -w "$hnat_path/hook_toggle" ]; then
+		disable_hnat_runtime "$hnat_path"
+	fi
+
+	# ---------- engine activation ----------
+	case "$fastpath" in
+	"mediatek_hnat")
+		config_get_bool fastpath_mh_eth_hnat "config" "fastpath_mh_eth_hnat" "1"
+
+		if ! load_hnat_module; then
+			logger -t turboacc "ERROR: cannot load mtkhnat/mediatek_hnat module"
+		fi
+
+		ensure_debugfs
+		wait_hnat_debugfs "$hnat_path" || \
+			logger -t turboacc "WARNING: $hnat_path not present after loading HNAT module"
+
+		# hook_toggle: 1=enable HNAT for Ethernet, 0=disable
+		if [ -w "$hnat_path/hook_toggle" ]; then
+			echo "$fastpath_mh_eth_hnat" >"$hnat_path/hook_toggle" 2>/dev/null || \
+				logger -t turboacc "WARNING: failed to write hook_toggle=$fastpath_mh_eth_hnat"
+		else
+			logger -t turboacc "WARNING: $hnat_path/hook_toggle not writable (debugfs mounted? module loaded?)"
+		fi
+
+		if _uci_bool_enabled "$fastpath_mh_eth_hnat"; then
+			local fastpath_mh_eth_hnat_v6 fastpath_mh_eth_hnat_bind_rate
+
+			config_get_bool fastpath_mh_eth_hnat_v6 "config" "fastpath_mh_eth_hnat_v6" "1"
+			config_get fastpath_mh_eth_hnat_bind_rate "config" "fastpath_mh_eth_hnat_bind_rate" "30"
+
+			# hnat_setting: cmd 8 = IPv6 HNAT toggle, cmd 11 = bind rate threshold
+			hwrite "$hnat_path/hnat_setting" "8 $fastpath_mh_eth_hnat_v6" || \
+				logger -t turboacc "WARNING: failed to write hnat_setting (IPv6)"
+			hwrite "$hnat_path/hnat_setting" "11 $fastpath_mh_eth_hnat_bind_rate" || \
+				logger -t turboacc "WARNING: failed to write hnat_setting (bind_rate)"
+
+			logger -t turboacc "engine=mediatek_hnat eth=$fastpath_mh_eth_hnat v6=$fastpath_mh_eth_hnat_v6 bind_rate=$fastpath_mh_eth_hnat_bind_rate"
+		else
+			logger -t turboacc "engine=mediatek_hnat eth=0 (Ethernet HNAT disabled by config)"
+		fi
+		;;
+	"none"|"disabled"|"")
+		logger -t turboacc "engine=none (no fastpath selected)"
+		;;
+	*)
+		disable_hnat_runtime "$hnat_path"
+		logger -t turboacc "WARNING: unsupported engine=$fastpath; MTK HNAT disabled"
+		;;
+	esac
+
+	# ---------- TCP CCA ----------
+	local tcpcca
+	config_get tcpcca "config" "tcpcca" "cubic"
+	if [ -n "$tcpcca" ] && grep -qF "$tcpcca" /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+		sysctl -w "net.ipv4.tcp_congestion_control=$tcpcca" >/dev/null 2>&1 || \
+			logger -t turboacc "WARNING: failed to set tcp_congestion_control=$tcpcca"
+	else
+		logger -t turboacc "WARNING: tcpcca=$tcpcca not available, keeping current"
+	fi
+
+	logger -t turboacc "started (fastpath=$fastpath tcpcca=$tcpcca)"
+}
+
+reload_service() {
+	stop_service
+	sleep 1
+	start_service
+}
+
+service_triggers() {
+	procd_add_reload_trigger "turboacc"
+}

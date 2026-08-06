@@ -1,0 +1,138 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=01
+USE_PROCD=1
+
+NAME=fancontrol
+PROG=/usr/bin/$NAME
+DEFAULT_CURVE='20:0,35:0,50:77,70:159,100:255'
+
+find_pwmfan() {
+	local hwmon name
+
+	for hwmon in /sys/class/hwmon/hwmon*; do
+		[ -r "$hwmon/name" ] || continue
+		read -r name < "$hwmon/name"
+		[ "$name" = "pwmfan" ] || continue
+		[ -w "$hwmon/pwm1" ] && {
+			echo "$hwmon/pwm1"
+			return 0
+		}
+	done
+
+	return 1
+}
+
+set_pwm_max() {
+	config_load "$NAME"
+
+	local fan_file
+	config_get fan_file settings fan_file
+	[ -w "$fan_file" ] || fan_file="$(find_pwmfan)"
+
+	[ -n "$fan_file" ] && [ -w "$fan_file" ] && echo 255 > "$fan_file" 2>/dev/null
+}
+
+validate_curve() (
+	local curve="$1" point temp pwm count=0 previous_temp=-5 previous_pwm=0
+
+	set -f
+	IFS=,
+	set -- $curve
+	[ "$#" -eq 5 ] || return 1
+
+	for point in "$@"; do
+		temp="${point%%:*}"
+		pwm="${point#*:}"
+		[ "$temp" != "$point" ] && [ "${pwm#*:}" = "$pwm" ] || return 1
+		case "$temp:$pwm" in
+			*[!0-9:]*) return 1 ;;
+		esac
+		[ -n "$temp" ] && [ -n "$pwm" ] || return 1
+		[ "$temp" -le 100 ] && [ "$pwm" -le 255 ] || return 1
+		[ "$temp" -ge $((previous_temp + 5)) ] || return 1
+		[ "$pwm" -ge "$previous_pwm" ] || return 1
+		previous_temp="$temp"
+		previous_pwm="$pwm"
+		count=$((count + 1))
+	done
+
+	[ "$count" -eq 5 ]
+)
+
+migrate_curve_config() {
+	local curve
+
+	curve="$(uci -q get fancontrol.settings.curve)"
+	validate_curve "$curve" && return 0
+
+	logger -t fancontrol "Migrating invalid or legacy fan curve to five-point default."
+	uci -q set "fancontrol.settings.curve=$DEFAULT_CURVE"
+	uci -q commit fancontrol
+}
+
+migrate_legacy_temperature_options() {
+	local option changed=0
+
+	for option in thermal_file weight weight_5g_temp; do
+		if uci -q get "fancontrol.settings.$option" >/dev/null; then
+			uci -q delete "fancontrol.settings.$option"
+			changed=1
+		fi
+	done
+
+	[ "$changed" = "1" ] && uci -q commit fancontrol
+}
+
+start_service() {
+	migrate_legacy_temperature_options
+	migrate_curve_config
+	config_load "$NAME"
+
+	local enabled
+	config_get enabled settings enabled
+	[ "$enabled" = "1" ] || {
+		set_pwm_max
+		logger -t fancontrol "Instance \"$NAME\" disabled; forcing PWM 255."
+		return 1
+	}
+
+	local fan_file curve temp_div interval temp_fail_limit
+
+	config_get fan_file settings fan_file
+	config_get curve settings curve
+	config_get temp_div settings temp_div
+	config_get interval settings interval
+	config_get temp_fail_limit settings temp_fail_limit
+
+	[ -w "$fan_file" ] || fan_file="$(find_pwmfan)"
+
+	procd_open_instance
+	procd_set_param command "$PROG"
+	[ -n "$fan_file" ] && procd_append_param command -F "$fan_file"
+	[ -n "$curve" ] && procd_append_param command -c "$curve"
+	[ -n "$temp_div" ] && procd_append_param command -d "$temp_div"
+	[ -n "$interval" ] && procd_append_param command -i "$interval"
+	[ -n "$temp_fail_limit" ] && procd_append_param command -n "$temp_fail_limit"
+	procd_append_param command -S /var/run/fancontrol.json
+	procd_set_param respawn
+	procd_set_param term_timeout 5
+	procd_close_instance
+}
+
+stop_service() {
+	set_pwm_max
+}
+
+service_stopped() {
+	set_pwm_max
+}
+
+reload() {
+	procd_reload_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger "fancontrol"
+}

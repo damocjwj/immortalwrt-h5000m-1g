@@ -1,0 +1,88 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-fancontrol\n"
+"PO-Revision-Date: 2026-06-26 00:00+0800\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Fan Control"
+msgstr "风扇控制"
+
+msgid "Live Status"
+msgstr "实时状态"
+
+msgid "CPU Temperature"
+msgstr "CPU温度"
+
+msgid "Fan PWM"
+msgstr "风扇 PWM"
+
+msgid "Fan Settings"
+msgstr "风扇设置"
+
+msgid "Fan Curve"
+msgstr "风扇曲线"
+
+msgid "Apply & Restart"
+msgstr "应用并重启"
+
+msgid "Reset Default"
+msgstr "恢复默认"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Temperature sampling interval (s)"
+msgstr "温度采样间隔（秒）"
+
+msgid "Temperature failure threshold"
+msgstr "温度失效判定次数"
+
+msgid "Saved. Restarting service..."
+msgstr "已保存，正在重启服务..."
+
+msgid "Applying..."
+msgstr "正在应用..."
+
+msgid "Saved and service restarted."
+msgstr "已保存并重启服务。"
+
+msgid "Service restart failed."
+msgstr "服务重启失败。"
+
+msgid "Unable to apply settings: %s"
+msgstr "无法应用设置：%s"
+
+msgid "Failed to save configuration: %s"
+msgstr "保存配置失败：%s"
+
+msgid "Unable to reset form: %s"
+msgstr "无法复位表单：%s"
+
+msgid "Unable to restart fancontrol: %s"
+msgstr "无法重启 fancontrol：%s"
+
+msgid "Invalid fan curve input: %s"
+msgstr "风扇曲线输入无效：%s"
+
+msgid "Please enter a valid number."
+msgstr "请输入有效数字。"
+
+msgid "Temperature must be between 0 and 100°C."
+msgstr "温度必须在 0 到 100°C 之间。"
+
+msgid "PWM must be between 0 and 255."
+msgstr "PWM 必须在 0 到 255 之间。"
+
+msgid "Temperature must increase by at least 5°C."
+msgstr "温度必须至少递增 5°C。"
+
+msgid "PWM must not decrease."
+msgstr "PWM 不能下降。"

@@ -1,0 +1,10 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Project-Id-Version: luci-app-turboacc-mtk\n"
+"Language: zh-Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Grant UCI access for luci-app-turboacc"
+msgstr "授予 luci-app-turboacc 访问 UCI 配置的权限。"
