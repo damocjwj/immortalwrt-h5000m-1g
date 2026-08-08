@@ -35,10 +35,13 @@ expect_eq() {
 	[ "$1" = "$2" ] || fail "$3 (got '$1', expected '$2')"
 }
 
-git cat-file -e h5000m-stable-2026.07.17^{commit} 2>/dev/null || \
-	fail "4G stable source tag is unavailable"
-git merge-base --is-ancestor h5000m-stable-2026.07.17 HEAD || \
-	fail "HEAD does not descend from h5000m-stable-2026.07.17"
+# This distribution repository intentionally contains only the reviewed 1G
+# snapshots, not the complete upstream history.  The immutable source lock
+# and hardware manifest are therefore the reproducibility anchors here.
+case "$SOURCE_COMMIT" in
+	????????????????????????????????????????) ;;
+	*) fail "invalid locked upstream source commit" ;;
+esac
 expect_eq "$H5000M_1G_EMMC_SECTORS" 15269888 "8GTF4R sector count"
 expect_eq "$H5000M_1G_EMMC_BYTES" 7818182656 "8GTF4R byte count"
 
@@ -82,19 +85,15 @@ for symbol in \
 	CONFIG_PACKAGE_u-boot-mt7987_hiveton_h5000m-1g-emmc=y \
 	CONFIG_PACKAGE_kmod-br-netfilter=y CONFIG_PACKAGE_kmod-ipt-core=y \
 	CONFIG_PACKAGE_kmod-nf-ipt=y \
-	CONFIG_PACKAGE_kmod-dummy=y CONFIG_PACKAGE_kmod-inet-diag=y \
-	CONFIG_PACKAGE_kmod-nf-socket=y CONFIG_PACKAGE_kmod-nf-tproxy=y \
-	CONFIG_PACKAGE_kmod-nft-socket=y CONFIG_PACKAGE_kmod-nft-tproxy=y \
-	CONFIG_PACKAGE_kmod-tun=y \
 	CONFIG_PACKAGE_kmod-mediatek_hnat=y CONFIG_PACKAGE_kmod-warp=y \
 	CONFIG_PACKAGE_kmod-mt7992=y CONFIG_PACKAGE_kmod-mt799a=y \
-	CONFIG_PACKAGE_kmod-tcp-bbr=y CONFIG_PACKAGE_luci-app-turboacc-mtk=y \
+	CONFIG_PACKAGE_kmod-tcp-bbr=y \
 	CONFIG_PACKAGE_fancontrol=y CONFIG_PACKAGE_luci-app-fancontrol=y \
-	CONFIG_PACKAGE_luci-app-modem=y CONFIG_PACKAGE_quectel-CM-5G=y \
+	CONFIG_DEFAULT_luci-app-modem=y CONFIG_DEFAULT_quectel-CM-5G=y \
 	CONFIG_DEFAULT_sms-tool=y \
 	CONFIG_PACKAGE_dnsmasq-full=y \
 	CONFIG_PACKAGE_wpad-openssl=y CONFIG_PACKAGE_luci-app-package-manager=y \
-	CONFIG_PACKAGE_uboot-envtools=y CONFIG_PACKAGE_mkf2fs=y; do
+	CONFIG_DEFAULT_uboot-envtools=y CONFIG_PACKAGE_mkf2fs=y; do
 	expect_config "$symbol"
 done
 
@@ -115,9 +114,17 @@ for symbol in \
 	CONFIG_PACKAGE_kmod-nf-ipvs=y CONFIG_PACKAGE_kmod-udptunnel4=y \
 	CONFIG_PACKAGE_kmod-udptunnel6=y CONFIG_PACKAGE_kmod-ipt-fullconenat=y \
 	CONFIG_PACKAGE_iptables-mod-fullconenat=y CONFIG_PACKAGE_luci-app-turboacc=y \
+	CONFIG_PACKAGE_luci-app-turboacc-mtk=y \
+	CONFIG_PACKAGE_kmod-dummy=y CONFIG_PACKAGE_kmod-inet-diag=y \
+	CONFIG_PACKAGE_kmod-nf-socket=y CONFIG_PACKAGE_kmod-nf-tproxy=y \
+	CONFIG_PACKAGE_kmod-nft-socket=y CONFIG_PACKAGE_kmod-nft-tproxy=y \
+	CONFIG_PACKAGE_kmod-tun=y \
 	CONFIG_PACKAGE_kmod-fs-ext4=y CONFIG_PACKAGE_luci-app-diskman=y \
 	CONFIG_PACKAGE_luci-app-nikki=y CONFIG_PACKAGE_nikki=y \
 	CONFIG_PACKAGE_subpipe=y CONFIG_PACKAGE_zapret2=y \
+	CONFIG_PACKAGE_byedpi=y CONFIG_PACKAGE_luci-app-byedpi-manager=y \
+	CONFIG_PACKAGE_zapret2-nfqws=y CONFIG_PACKAGE_luci-app-nfqws2=y \
+	CONFIG_PACKAGE_h5000m-boot-health=y \
 	CONFIG_PACKAGE_luci-app-sms-tool=y; do
 	expect_no_config "$symbol"
 done
@@ -171,6 +178,10 @@ fi
 
 env_baseline=target/linux/mediatek/filogic/base-files/etc/h5000m-1g-uboot.env
 env_defaults=target/linux/mediatek/filogic/base-files/etc/uci-defaults/97-h5000m-1g-uboot-env
+if rg -q 'bootcount|boot_limit|bootlimit|h5000m-boot-health' \
+	"$env_baseline" "$env_defaults"; then
+	fail "1G boot health/automatic recovery experiment is still present"
+fi
 for text in \
 	'bootcmd=run boot_emmc' 'loadaddr=0x48000000' \
 	'bootm_size=0x6000000' 'boot_fit_max_blocks=30000' \

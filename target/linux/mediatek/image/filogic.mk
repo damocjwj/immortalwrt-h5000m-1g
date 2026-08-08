@@ -925,9 +925,10 @@ define Device/hiveton-h5000m-1g
   # Keep the standard bridge netfilter sysctl policy: bridge hooks remain
   # disabled unless an administrator explicitly enables them.
   DEVICE_PACKAGES += kmod-br-netfilter \
-	kmod-dummy kmod-inet-diag kmod-nf-socket kmod-nf-tproxy \
-	kmod-nft-socket kmod-nft-tproxy kmod-tun \
-	-block-mount -e2fsprogs
+	-block-mount -e2fsprogs \
+	-kmod-dummy -kmod-inet-diag -kmod-nf-socket -kmod-nf-tproxy \
+	-kmod-nft-socket -kmod-nft-tproxy -kmod-tun \
+	-luci-app-turboacc-mtk
   KERNEL_LOADADDR := 0x40000000
   KERNEL_INITRAMFS := kernel-bin | lzma | \
 	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | \
