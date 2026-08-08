@@ -338,13 +338,11 @@ if [ "${1:-}" = "--artifacts" ]; then
 	}
 	for package in \
 		kmod-br-netfilter kmod-ipt-core kmod-nf-ipt \
-		kmod-dummy kmod-inet-diag kmod-nf-socket kmod-nf-tproxy \
-		kmod-nft-socket kmod-nft-tproxy kmod-tun \
 		kmod-mediatek_hnat kmod-warp kmod-mt_wifi7 kmod-mt_hwifi \
 		kmod-mt7992 kmod-mt799a kmod-mtk_wed kmod-tcp-bbr \
 		quectel-CM-5G luci-app-modem sms-tool \
 		fancontrol luci-app-fancontrol \
-		luci-app-turboacc-mtk dnsmasq-full wpad-openssl \
+		dnsmasq-full wpad-openssl \
 		luci-app-package-manager uboot-envtools mkf2fs; do
 		manifest_has "$package" || fail "required package missing: $package"
 	done
@@ -353,6 +351,9 @@ if [ "${1:-}" = "--artifacts" ]; then
 		mtd ubi-utils shellsync kmod-macvlan kmod-wireguard kmod-veth \
 		kmod-nf-ipvs kmod-udptunnel4 kmod-udptunnel6 \
 		kmod-ipt-fullconenat iptables-mod-fullconenat luci-app-turboacc \
+		luci-app-turboacc-mtk \
+		kmod-dummy kmod-inet-diag kmod-nf-socket kmod-nf-tproxy \
+		kmod-nft-socket kmod-nft-tproxy kmod-tun \
 		kmod-fs-ext4 luci-app-diskman nikki luci-app-nikki subpipe zapret2 \
 		luci-app-sms-tool; do
 		manifest_has "$package" && fail "forbidden package is installed: $package"
