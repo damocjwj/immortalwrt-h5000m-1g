@@ -9,7 +9,12 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=datconf
 PKG_REVISION:=757f9679
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_REVISION).tar.bz2
+# The vendor snapshot is intentionally kept in src/.  The historical recipe
+# named a tarball but supplied neither a URL nor a source protocol, causing a
+# clean build to depend on an accidental pre-existing dl/ cache.  src/ was
+# extracted from datconf-757f9679.tar.bz2 (SHA256 below) and is the complete,
+# reviewed source used by this package.
+PKG_SOURCE_SHA256:=3cbb7489e3df1be52d184b600129a6081e7225981acdbcc5c2cb7149f11c37f1
 PKG_RELEASE:=1
 PKG_USE_NINJA:=0
 
@@ -56,6 +61,11 @@ TARGET_LDFLAGS += -L$(STAGING_DIR)/usr/lib
 CMAKE_OPTIONS = \
         -DLUAPATH=/usr/lib/lua
 
+define Build/Prepare
+	$(RM) -r $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
+	$(CP) ./src/. $(PKG_BUILD_DIR)/
+endef
 
 define Package/libkvcutil/install
 	$(INSTALL_DIR) $(1)/lib

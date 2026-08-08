@@ -73,6 +73,18 @@ done
 expect_file docs/h5000m-1g-hardware-manifest.sha256
 sha256sum -c docs/h5000m-1g-hardware-manifest.sha256 >/dev/null || \
 	fail "hardware manifest mismatch"
+expect_file docs/h5000m-1g-datconf-source.sha256
+sha256sum -c docs/h5000m-1g-datconf-source.sha256 >/dev/null || \
+	fail "vendored datconf source manifest mismatch"
+expect_file package/mtk/applications/datconf/Makefile
+expect_file package/mtk/applications/datconf/src/CMakeLists.txt
+expect_line package/mtk/applications/datconf/Makefile \
+	'PKG_SOURCE_SHA256:=3cbb7489e3df1be52d184b600129a6081e7225981acdbcc5c2cb7149f11c37f1'
+grep -Fq '$(CP) ./src/. $(PKG_BUILD_DIR)/' package/mtk/applications/datconf/Makefile || \
+	fail "datconf does not prepare from its vendored source"
+if grep -Fq 'PKG_SOURCE:=' package/mtk/applications/datconf/Makefile; then
+	fail "datconf retains an implicit source archive dependency"
+fi
 expect_file package/network/config/netifd/Makefile
 grep -Fq '$(LN) ifup $(1)/sbin/ifdown' package/network/config/netifd/Makefile || \
 	fail "netifd does not install ifdown as an ifup symlink"
