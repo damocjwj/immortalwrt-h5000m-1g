@@ -101,6 +101,7 @@ for symbol in \
 	CONFIG_PACKAGE_kmod-mt7992=y CONFIG_PACKAGE_kmod-mt799a=y \
 	CONFIG_PACKAGE_kmod-tcp-bbr=y \
 	CONFIG_PACKAGE_fancontrol=y CONFIG_PACKAGE_luci-app-fancontrol=y \
+	CONFIG_PACKAGE_luci-app-turboacc-mtk=y \
 	CONFIG_DEFAULT_luci-app-modem=y CONFIG_DEFAULT_quectel-CM-5G=y \
 	CONFIG_DEFAULT_sms-tool=y \
 	CONFIG_PACKAGE_dnsmasq-full=y \
@@ -126,7 +127,6 @@ for symbol in \
 	CONFIG_PACKAGE_kmod-nf-ipvs=y CONFIG_PACKAGE_kmod-udptunnel4=y \
 	CONFIG_PACKAGE_kmod-udptunnel6=y CONFIG_PACKAGE_kmod-ipt-fullconenat=y \
 	CONFIG_PACKAGE_iptables-mod-fullconenat=y CONFIG_PACKAGE_luci-app-turboacc=y \
-	CONFIG_PACKAGE_luci-app-turboacc-mtk=y \
 	CONFIG_PACKAGE_kmod-dummy=y CONFIG_PACKAGE_kmod-inet-diag=y \
 	CONFIG_PACKAGE_kmod-nf-socket=y CONFIG_PACKAGE_kmod-nf-tproxy=y \
 	CONFIG_PACKAGE_kmod-nft-socket=y CONFIG_PACKAGE_kmod-nft-tproxy=y \
@@ -351,7 +351,6 @@ if [ "${1:-}" = "--artifacts" ]; then
 		mtd ubi-utils shellsync kmod-macvlan kmod-wireguard kmod-veth \
 		kmod-nf-ipvs kmod-udptunnel4 kmod-udptunnel6 \
 		kmod-ipt-fullconenat iptables-mod-fullconenat luci-app-turboacc \
-		luci-app-turboacc-mtk \
 		kmod-dummy kmod-inet-diag kmod-nf-socket kmod-nf-tproxy \
 		kmod-nft-socket kmod-nft-tproxy kmod-tun \
 		kmod-fs-ext4 luci-app-diskman nikki luci-app-nikki subpipe zapret2 \

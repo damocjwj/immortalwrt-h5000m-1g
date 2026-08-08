@@ -927,8 +927,7 @@ define Device/hiveton-h5000m-1g
   DEVICE_PACKAGES += kmod-br-netfilter \
 	-block-mount -e2fsprogs \
 	-kmod-dummy -kmod-inet-diag -kmod-nf-socket -kmod-nf-tproxy \
-	-kmod-nft-socket -kmod-nft-tproxy -kmod-tun \
-	-luci-app-turboacc-mtk
+	-kmod-nft-socket -kmod-nft-tproxy -kmod-tun
   KERNEL_LOADADDR := 0x40000000
   KERNEL_INITRAMFS := kernel-bin | lzma | \
 	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | \
