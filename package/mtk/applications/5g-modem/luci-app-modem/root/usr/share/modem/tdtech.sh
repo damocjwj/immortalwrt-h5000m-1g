@@ -634,7 +634,7 @@ tdtech_sim_info()
     fi
 
     ISP_Read(){
-            operatorCode=$(sendat 1 'AT^EONS=2' | awk -F ',' '{print $2}' | sed '/^$/d')
+            operatorCode=$(at "$at_port" 'AT^EONS=2' | awk -F ',' '{print $2}' | sed '/^$/d')
             case "$operatorCode" in
             "46000" | "46002" | "46004" | "46007" | "46008" | "46020")
                 isp="中国移动"

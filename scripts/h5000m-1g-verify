@@ -68,7 +68,11 @@ for feed in packages luci routing telephony; do
 	esac
 	[ -d "feeds/$feed/.git" ] || fail "feed is absent: $feed"
 	expect_eq "$(git -C "feeds/$feed" rev-parse HEAD)" "$wanted" "feed $feed commit"
+	[ -z "$(git -C "feeds/$feed" status --porcelain)" ] || fail "feed $feed is dirty"
 done
+
+sha256sum -c docs/h5000m-argon-manifest.sha256 >/dev/null || fail "Argon source mismatch"
+sha256sum -c docs/h5000m-1g-vendor-manifest.sha256 >/dev/null || fail "vendor layer mismatch"
 
 expect_file docs/h5000m-1g-hardware-manifest.sha256
 sha256sum -c docs/h5000m-1g-hardware-manifest.sha256 >/dev/null || \
@@ -102,6 +106,9 @@ for symbol in \
 	CONFIG_PACKAGE_kmod-tcp-bbr=y \
 	CONFIG_PACKAGE_fancontrol=y CONFIG_PACKAGE_luci-app-fancontrol=y \
 	CONFIG_PACKAGE_luci-app-turboacc-mtk=y \
+	CONFIG_PACKAGE_luci-i18n-turboacc-mtk-zh-cn=y \
+	CONFIG_PACKAGE_luci-i18n-modem-zh-cn=y CONFIG_PACKAGE_mtk-smp=y \
+	CONFIG_PACKAGE_f2fsck=y \
 	CONFIG_DEFAULT_luci-app-modem=y CONFIG_DEFAULT_quectel-CM-5G=y \
 	CONFIG_DEFAULT_sms-tool=y \
 	CONFIG_PACKAGE_dnsmasq-full=y \
@@ -134,12 +141,31 @@ for symbol in \
 	CONFIG_PACKAGE_kmod-fs-ext4=y CONFIG_PACKAGE_luci-app-diskman=y \
 	CONFIG_PACKAGE_luci-app-nikki=y CONFIG_PACKAGE_nikki=y \
 	CONFIG_PACKAGE_subpipe=y CONFIG_PACKAGE_zapret2=y \
+	CONFIG_PACKAGE_frpc=y CONFIG_PACKAGE_luci-app-frpc=y \
+	CONFIG_PACKAGE_natmap=y CONFIG_PACKAGE_luci-app-natmap=y \
+	CONFIG_PACKAGE_luci-app-subpipe=y CONFIG_PACKAGE_luci-app-zapret2=y \
+	CONFIG_PACKAGE_kmod-nfnetlink-queue=y CONFIG_PACKAGE_kmod-nft-queue=y \
 	CONFIG_PACKAGE_byedpi=y CONFIG_PACKAGE_luci-app-byedpi-manager=y \
 	CONFIG_PACKAGE_zapret2-nfqws=y CONFIG_PACKAGE_luci-app-nfqws2=y \
 	CONFIG_PACKAGE_h5000m-boot-health=y \
 	CONFIG_PACKAGE_luci-app-sms-tool=y; do
 	expect_no_config "$symbol"
 done
+
+smp=package/mtk/applications/mtk-smp/files/smp.sh
+grep -Fq 'hiveton,h5000m|hiveton,h5000m-1g)' "$smp" || fail "1G SMP dispatch missing"
+grep -Fq 'CPU1_AFFINITY="$eth_tx $eth_rx1"' "$smp" || fail "TX IRQ policy mismatch"
+turbo=package/mtk/applications/luci-app-turboacc-mtk
+expect_eq "$(sha256sum "$turbo/htdocs/luci-static/resources/view/turboacc.js" | awk '{print $1}')" \
+	72d8e2de4db4525f6fd66687ef4ab18e8ec131d8e46730a68fe864f8a3aab574 "MTK-only frontend"
+grep -Fq '"title": "网络加速"' "$turbo/root/usr/share/luci/menu.d/luci-app-turboacc.json" || fail "TurboACC menu mismatch"
+modem=package/mtk/applications/5g-modem/luci-app-modem/root
+if rg -n 'sendat|unknown_get_mode' "$modem/usr/share/modem/tdtech.sh"; then
+	fail "obsolete TD Tech AT entrypoint"
+fi
+sh -n "$smp"
+sh -n "$modem/etc/init.d/modem"
+sh -n "$modem/usr/share/modem/tdtech.sh"
 
 if awk -F= '$1 ~ /^CONFIG_PACKAGE_/ && $2 == "m" { found = 1 } END { exit !found }' .config; then
 	fail "a selected package uses module mode"
@@ -341,6 +367,8 @@ if [ "${1:-}" = "--artifacts" ]; then
 		kmod-mediatek_hnat kmod-warp kmod-mt_wifi7 kmod-mt_hwifi \
 		kmod-mt7992 kmod-mt799a kmod-mtk_wed kmod-tcp-bbr \
 		quectel-CM-5G luci-app-modem sms-tool \
+		luci-i18n-modem-zh-cn mtk-smp f2fsck \
+		luci-app-turboacc-mtk luci-i18n-turboacc-mtk-zh-cn \
 		fancontrol luci-app-fancontrol \
 		dnsmasq-full wpad-openssl \
 		luci-app-package-manager uboot-envtools mkf2fs; do
@@ -354,6 +382,8 @@ if [ "${1:-}" = "--artifacts" ]; then
 		kmod-dummy kmod-inet-diag kmod-nf-socket kmod-nf-tproxy \
 		kmod-nft-socket kmod-nft-tproxy kmod-tun \
 		kmod-fs-ext4 luci-app-diskman nikki luci-app-nikki subpipe zapret2 \
+		frpc luci-app-frpc natmap luci-app-natmap luci-app-subpipe luci-app-zapret2 \
+		kmod-nfnetlink-queue kmod-nft-queue \
 		luci-app-sms-tool; do
 		manifest_has "$package" && fail "forbidden package is installed: $package"
 	done

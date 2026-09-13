@@ -99,6 +99,21 @@ MT7990_whnat()
 	fi
 }
 
+# H5000M uses the MT7987 four-ring RSS layout handled by MT7990_whnat().
+# Keep the vendor RPS policy, which maps Ethernet receive processing to
+# CPUs 1-3 (bitmap 0xe), but place the shared Ethernet TX completion IRQ on
+# CPU1.  This was the most balanced mapping in the H5000M device test and is
+# deliberately scoped to this board so other vendor devices stay unchanged.
+H5000M_whnat()
+{
+	MT7990_whnat "$@"
+
+	CPU0_AFFINITY="$wifi1_irq $wifi2_irq $eth_rx0"
+	CPU1_AFFINITY="$eth_tx $eth_rx1"
+	CPU2_AFFINITY="$eth_rx2"
+	CPU3_AFFINITY="$eth_rx3 $usb_irq"
+}
+
 MT7986_whnat()
 {
 	num_of_wifi=$1
@@ -795,6 +810,9 @@ setup_model()
 	mt_whnat_en=$(module_exist "mt_whnat")
 
 	case $board in
+	hiveton,h5000m|hiveton,h5000m-1g)
+		H5000M_whnat $num_of_wifi
+		;;
 	*7988*)
 		MT7990_whnat $num_of_wifi
 		;;

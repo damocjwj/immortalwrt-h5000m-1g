@@ -64,7 +64,7 @@ xiaomi_initial_setup()
 
 # H5000M keeps a FIT plus its optional configuration archive in one GPT
 # production partition.  The generic FIT helper does not know that partition's
-# size, so reject a write before it can cross into the separate data partition.
+# size, so reject a write before it can exceed the production volume.
 h5000m_fit_capacity_check() {
 	local part sectors fit_bytes fit_blocks backup_bytes backup_blocks wanted_blocks
 	# The caller supplies the board-specific RAM loading boundary: 1 GiB for
@@ -170,6 +170,8 @@ h5000m_fit_overlay_blocks() {
 
 h5000m_fit_do_upgrade() {
 	local overlay_blocks
+	# Clear at the actual fitrw boundary below, not the padded FIT length.
+	local EMMC_NO_KERNEL_CLEAR=1
 
 	export_fitblk_bootdev
 	[ "$CI_METHOD" = "emmc" ] || return 1

@@ -46,12 +46,20 @@ emmc_upgrade_tar() {
 emmc_upgrade_fit() {
 	local fit_file="$1"
 	[ "$CI_KERNPART" -a -z "$EMMC_KERN_DEV" ] && export EMMC_KERN_DEV="$(find_mmc_part $CI_KERNPART $CI_ROOTDEV)"
+	[ -n "$EMMC_KERN_DEV" ] || return 1
 
-	if [ "$EMMC_KERN_DEV" ]; then
-		export EMMC_KERNEL_BLOCKS=$(($(get_image "$fit_file" | fwtool -i /dev/null -T - | dd of="$EMMC_KERN_DEV" bs=512 2>&1 | grep "records out" | cut -d' ' -f1)))
+	export EMMC_KERNEL_BLOCKS=$(($(get_image "$fit_file" | fwtool -i /dev/null -T - | dd of="$EMMC_KERN_DEV" bs=512 2>&1 | grep "records out" | cut -d' ' -f1)))
+	case "$EMMC_KERNEL_BLOCKS" in
+		''|*[!0-9]*|0) return 1 ;;
+	esac
 
-		[ -z "$UPGRADE_BACKUP" ] && dd if=/dev/zero of="$EMMC_KERN_DEV" bs=512 seek=$EMMC_KERNEL_BLOCKS count=8
+	if [ -z "$UPGRADE_BACKUP" ] && [ -z "$EMMC_NO_KERNEL_CLEAR" ]; then
+		dd if=/dev/zero of="$EMMC_KERN_DEV" bs=512 seek=$EMMC_KERNEL_BLOCKS count=8 || return 1
 	fi
+
+	# A configuration-preserving upgrade intentionally skips the clear above.
+	# Do not leak the false status of that condition to platform_do_upgrade().
+	return 0
 }
 
 emmc_copy_config() {
