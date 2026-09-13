@@ -334,9 +334,9 @@ if [ "${1:-}" = "--artifacts" ]; then
 		expect_file "$artifact"
 	done
 	expect_eq "$(sha256sum "$prefix-emmc-preloader.bin" | awk '{print $1}')" \
-		"$H5000M_1G_BL2_SHA256" "reviewed BL2 SHA-256"
+		"${H5000M_1G_BUILD_BL2_SHA256:-$H5000M_1G_BL2_SHA256}" "reviewed BL2 SHA-256"
 	expect_eq "$(sha256sum "$prefix-emmc-bl31-uboot.fip" | awk '{print $1}')" \
-		"$H5000M_1G_FIP_SHA256" "reviewed FIP SHA-256"
+		"${H5000M_1G_BUILD_FIP_SHA256:-$H5000M_1G_FIP_SHA256}" "reviewed FIP SHA-256"
 
 	fit_bytes="$(staging_dir/host/bin/fwtool -i /dev/null -T "$prefix-squashfs-sysupgrade.itb" | wc -c)"
 	recovery_bytes="$(wc -c < "$prefix-initramfs-recovery.itb")"

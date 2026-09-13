@@ -1,3 +1,25 @@
+# Hiveton H5000M 1G minimal
+
+This branch builds the H5000M with 1 GiB RAM and 8 GB eMMC. The LAN address
+is `192.168.1.1`. It is not an image for the modified 4 GiB board.
+
+本分支仅构建 1G/8GB minimal 与 recovery。当前公共基线、固定 feeds、
+1G 专用限制和验证记录见 [同步说明](docs/h5000m-1g-update-20260914.md)。
+1G 常用版在独立分支维护，本轮没有同步更新。
+
+```sh
+./scripts/feeds update -a
+./scripts/feeds install -a
+cp config/h5000m-1g-minimal.config .config
+make defconfig
+./scripts/h5000m-1g-verify
+make -j12 V=s
+./scripts/h5000m-1g-verify --artifacts
+```
+
+The upstream project description below is retained for reference; use the
+board-specific configuration and upgrade instructions linked above.
+
 <img src="https://avatars.githubusercontent.com/u/53193414?s=200&v=4" alt="logo" width="200" height="200" align="right">
 
 # Project ImmortalWrt

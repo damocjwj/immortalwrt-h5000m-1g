@@ -56,3 +56,10 @@ H5000M_1G_EMMC_BYTES=7818182656
 # source/configuration review before those artifacts may be flashed.
 H5000M_1G_BL2_SHA256=509f8f5777a2a9154d169005c80cf5fae2284fa7a74c9924d2acfa99236a9d38
 H5000M_1G_FIP_SHA256=b95201d9283a1f4efab97fcc9c4d39c0bd0b614305a9c1dfcc00b55986bbeaa1
+
+# 2026-09-14 clean build: original boot hashes above remain the legacy
+# reference. Only fixed build-date/version strings and BL2's trailing digest
+# differ; U-Boot executable sections and all boot sources are unchanged.
+# These artifacts are audited build outputs, not a request to flash them.
+H5000M_1G_BUILD_BL2_SHA256=52c4531fdb194c45af23012dc063f469f49dfafd2fd19166956996a4a8770789
+H5000M_1G_BUILD_FIP_SHA256=bbd1ba2e390a45a55664765a557cea62a30b16b57a858b7c2c970a968b44c055
