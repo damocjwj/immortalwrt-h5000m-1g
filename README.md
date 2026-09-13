@@ -1,13 +1,59 @@
 # Hiveton H5000M 1G minimal
 
-This branch builds the H5000M with 1 GiB RAM and 8 GB eMMC. The LAN address
-is `192.168.1.1`. It is not an image for the modified 4 GiB board.
+基于 ImmortalWrt MediaTek 私有驱动分支的非官方精简固件，适用于 **MT7987、
+1 GiB 内存、8 GB eMMC 的 H5000M**。不适用于改装 4G/256GB 版本。
+仓库只维护 `h5000m-1g-minimal` 分支；production 和 recovery 都使用 minimal 包集。
 
-本分支仅构建 1G/8GB minimal 与 recovery。当前公共基线、固定 feeds、
-1G 专用限制和验证记录见 [同步说明](docs/h5000m-1g-update-20260914.md)。
-1G 常用版在独立分支维护，本轮没有同步更新。
+- [下载固件与 SHA256](https://github.com/damocjwj/immortalwrt-h5000m-1g/releases/tag/h5000m-1g-minimal-2026.09.14)
+- [从原厂 kernel/rootfs 固件首次迁移](docs/h5000m-1g-install.md)
+- [当前设计、保留功能与改动清单](docs/h5000m-1g.md)
+- [本次构建与设备验证](docs/h5000m-1g-release-20260914.md)
+- [固定源码与 feeds](config/h5000m-source.lock)
+
+## 默认设置
+
+| 项目 | 默认值 |
+|---|---|
+| LAN / LuCI / SSH | `192.168.1.1` |
+| 用户名 / 密码 | `root` / `admin`（首次登录后修改） |
+| WAN | DHCP |
+| 根文件系统 | SquashFS + F2FS overlay |
+| recovery / production FIT 上限 | 各 96 MiB |
+| recovery 分区 | 128 MiB |
+| production 分区 | eMMC 剩余空间，约 7.14 GiB |
+
+已接入另一台 `192.168.1.1` 路由器时，先隔离网络再初始化。Wi-Fi 沿用板级
+默认行为，没有默认强制关闭；通电前应正确连接天线。
+
+## 下载文件如何选择
+
+文件共同前缀：`immortalwrt-mediatek-filogic-hiveton-h5000m-1g`。
+
+| 文件后缀 | 用途 |
+|---|---|
+| `-squashfs-sysupgrade.itb` | 已迁移到本项目布局的 production 升级 |
+| `-initramfs-recovery.itb` | RAM 启动、救援系统及 recovery 分区更新 |
+| `-emmc-gpt.bin` / `-emmc-gpt-backup.bin` | 首次迁移的主/备 GPT，不能作为固件上传 |
+| `-emmc-preloader.bin` | 1G emmc-comb BL2，仅首次迁移/启动链恢复 |
+| `-emmc-bl31-uboot.fip` | 1G BL31 + U-Boot，仅首次迁移/启动链恢复 |
+| `.manifest` / `SHA256SUMS` | 完整软件包版本和工件完整性校验 |
+
+**原厂独立 kernel/rootfs 布局不能直接上传本项目的 sysupgrade ITB，也不能
+使用 `sysupgrade -F` 强制升级。** 首次迁移涉及分区及启动链，须阅读完整手册。
+本项目 U-Boot 不保留原厂 Web 升级界面，使用串口菜单和 TFTP。
+
+本次 production 启动和两个分区的回读已验证。新 BL2/FIP 经过构建与二进制
+差异审查，未重新刷入设备；从所提供原厂版本出发的完整迁移仍未实测。
+短时验证不能替代长期负载、Wi-Fi 射频、5G 和真实 WAN/HNAT 测试。
+
+## 构建
+
+在普通 Linux 用户下操作，安装 OpenWrt 构建依赖，工作路径不要含空格。
+不要将旧树的 `build_dir`、`staging_dir`、`tmp` 或 feeds 软链接带入。
 
 ```sh
+git clone -b h5000m-1g-minimal --single-branch https://github.com/damocjwj/immortalwrt-h5000m-1g.git
+cd immortalwrt-h5000m-1g
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 cp config/h5000m-1g-minimal.config .config
@@ -17,111 +63,13 @@ make -j12 V=s
 ./scripts/h5000m-1g-verify --artifacts
 ```
 
-The upstream project description below is retained for reference; use the
-board-specific configuration and upgrade instructions linked above.
+`feeds.conf.default` 固定提交，不跟随 feeds 最新分支。选择的包均内置；不构建
+全量 kmod。Argon 和 datconf 源码自包含，minimal 不依赖其他本地包仓库。
+不要跨内核 ABI 强制安装 kmod；后续增包优先使用同一锁定源码重新构建。
 
-<img src="https://avatars.githubusercontent.com/u/53193414?s=200&v=4" alt="logo" width="200" height="200" align="right">
+## 来源
 
-# Project ImmortalWrt
-
-ImmortalWrt is a fork of [OpenWrt](https://openwrt.org), with more packages ported, more devices supported, default optimized profiles and localization modifications for mainland China users.<br/>
-Compared to upstream, we allow to use (non-upstreamable) modifications/hacks to provide better feature/performance/support.
-
-Default login address: http://192.168.6.1 or http://immortalwrt.lan, username: __root__, password: _none_.
-
-## Download
-Built firmware images are available for many architectures and come with a package selection to be used as WiFi home router. To quickly find a factory image usable to migrate from a vendor stock firmware to ImmortalWrt, try the *Firmware Selector*.
-
-- [ImmortalWrt Firmware Selector](https://firmware-selector.immortalwrt.org/)
-
-If your device is supported, please follow the **Info** link to see install instructions or consult the support resources listed below.
-
-## Development
-To build your own firmware you need a GNU/Linux, BSD or macOS system (case sensitive filesystem required). Cygwin is unsupported because of the lack of a case sensitive file system.<br/>
-
-  ### Requirements
-  To build with this project, Debian 11 is preferred. And you need use the CPU based on AMD64 architecture, with at least 4GB RAM and 25 GB available disk space. Make sure the __Internet__ is accessible.
-
-  The following tools are needed to compile ImmortalWrt, the package names vary between distributions.
-
-  - Here is an example for Debian/Ubuntu users:<br/>
-    - Method 1:
-      <details>
-        <summary>Setup dependencies via APT</summary>
-
-        ```bash
-        sudo apt update -y
-        sudo apt full-upgrade -y
-        sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
-          bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext gcc-multilib \
-          g++-multilib git gnutls-dev gperf haveged help2man intltool lib32gcc-s1 libc6-dev-i386 libelf-dev \
-          libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev \
-          libreadline-dev libssl-dev libtool libyaml-dev libz-dev lld llvm lrzsz mkisofs msmtp nano \
-          ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils \
-          python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo uglifyjs \
-          upx-ucl unzip vim wget xmlto xxd zlib1g-dev zstd
-        ```
-      </details>
-    - Method 2:
-      ```bash
-      sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
-      ```
-
-  Note:
-  - Do everything as an unprivileged user, not root, without sudo.
-  - Using CPUs based on other architectures should be fine to compile ImmortalWrt, but more hacks are needed - No warranty at all.
-  - You must __not__ have spaces or non-ascii characters in PATH or in the work folders on the drive.
-  - If you're using Windows Subsystem for Linux (or WSL), removing Windows folders from PATH is required, please see [Build system setup WSL](https://openwrt.org/docs/guide-developer/build-system/wsl) documentation.
-  - Using macOS as the host build OS is __not__ recommended. No warranty at all. You can get tips from [Build system setup macOS](https://openwrt.org/docs/guide-developer/build-system/buildroot.exigence.macosx) documentation.
-  - For more details, please see [Build system setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem) documentation.
-
-  ### Quickstart
-  1. Run `git clone -b mt798x-mt799x-6.6-mtwifi --single-branch --filter=blob:none https://github.com/padavanonly/immortalwrt-mt798x-24.10 immortalwrt-mt798x-24.10` to clone the source code.
-  2. Run `cd immortalwrt-mt798x-24.10` to enter source directory.
-  3. Run `./scripts/feeds update -a` to obtain all the latest package definitions defined in feeds.conf / feeds.conf.default
-  4. Run `./scripts/feeds install -a` to install symlinks for all obtained packages into package/feeds/
-  5. Copy the configuration file for your device from the `defconfig` directory to the project root directory and rename it `.config`
-     
-     ```
-     # MT7988_mt7990
-     cp -f defconfig/mt7988_mt7990.config .config
-
-     # MT7987_mt7992
-     cp -f defconfig/mt7987_mt7992.config .config
-
-     # MT7988_mt7992
-     cp -f defconfig/mt7988_mt7992.config .config
-
-     
-  6. Run `make` to build your firmware. This will download all sources, build the cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen applications for your target system.
-
-  ### Related Repositories
-  The main repository uses multiple sub-repositories to manage packages of different categories. All packages are installed via the OpenWrt package manager called opkg. If you're looking to develop the web interface or port packages to ImmortalWrt, please find the fitting repository below.
-  - [LuCI Web Interface](https://github.com/immortalwrt/luci): Modern and modular interface to control the device via a web browser.
-  - [ImmortalWrt Packages](https://github.com/immortalwrt/packages): Community repository of ported packages.
-  - [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically focused on (mesh) routing.
-  - [OpenWrt Video](https://github.com/openwrt/video): Packages specifically focused on display servers and clients (Xorg and Wayland).
-
-## Support Information
-For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
-  ### Documentation
-  - [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
-  - [User Guide](https://openwrt.org/docs/guide-user/start)
-  - [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
-  - [Technical Reference](https://openwrt.org/docs/techref/start)
-
-  ### Support Community
-  - Support Chat: group [@ctcgfw_openwrt_discuss](https://t.me/ctcgfw_openwrt_discuss) on [Telegram](https://telegram.org/).
-  - Support Chat: group [#immortalwrt](https://matrix.to/#/#immortalwrt:matrix.org) on [Matrix](https://matrix.org/).
-
-## License
-ImmortalWrt is licensed under [GPL-2.0-only](https://spdx.org/licenses/GPL-2.0-only.html).
-
-## Acknowledgements
-<table>
-  <tr>
-    <td><a href="https://dlercloud.com/"><img src="https://user-images.githubusercontent.com/22235437/111103249-f9ec6e00-8588-11eb-9bfc-67cc55574555.png" width="183" height="52" border="0" alt="Dler Cloud"></a></td>
-    <td><a href="https://www.jetbrains.com/"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_square.png" width="120" height="120" border="0" alt="JetBrains Black Box Logo logo"></a></td>
-    <td><a href="https://sourceforge.net/"><img src="https://sourceforge.net/sflogo.php?type=17&group_id=3663829" alt="SourceForge" width=200></a></td>
-  </tr>
-</table>
+厂商基线：[padavanonly/immortalwrt-mt798x-6.6](https://github.com/padavanonly/immortalwrt-mt798x-6.6/tree/30fbc1d6deba23c0e850185021e9ee42214925eb)。
+软件包继续遵循各自许可证；本仓库不代表 Hiveton、MediaTek 或 ImmortalWrt 官方维护。
+`docs/` 中带日期的早期审计记录仅描述当时版本，当前有效设计以本页所链接的
+手册和本次发布记录为准。
