@@ -1,4 +1,9 @@
+<!-- SPDX-License-Identifier: MIT -->
+
 # H5000M 1G：首次迁移与日常升级
+
+原创文字 Copyright (c) 2026 damocjwj，额外按 [MIT](LICENSE.MIT) 授权；
+范围和第三方材料除外条款见[许可说明](licensing.md)。
 
 ## 先确认适用范围
 
